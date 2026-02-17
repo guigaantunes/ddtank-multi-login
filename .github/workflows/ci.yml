@@ -61,7 +61,7 @@ jobs:
           }
 
           # Create legacy path junction for backward compatibility with older build.rs
-          if (-not (Test-Path $legacyPath)) {
+          if ((-not (Test-Path $legacyPath)) -and (Test-Path $sdkPath)) {
             $resolvedSdk = (Resolve-Path $sdkPath).Path
             New-Item -ItemType Junction -Path $legacyPath -Target $resolvedSdk | Out-Null
             Write-Host "Created legacy junction: $legacyPath -> $resolvedSdk" -ForegroundColor Green
