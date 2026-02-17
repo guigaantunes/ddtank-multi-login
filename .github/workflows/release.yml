@@ -34,25 +34,90 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
-      
-      - name: Build release
-        run: |
-          .\build-release.ps1
+
+      - name: Cache Sciter SDK
+        uses: actions/cache@v4
+        with:
+          path: C:\sciter-js-sdk-main
+          key: sciter-js-sdk-main
+
+      - name: Download Sciter SDK
         shell: pwsh
-      
+        run: |
+          if (-not (Test-Path "C:\sciter-js-sdk-main\bin\windows\packfolder.exe")) {
+            Write-Host "Baixando Sciter SDK..." -ForegroundColor Yellow
+            Invoke-WebRequest -Uri "https://github.com/c-smile/sciter-js-sdk/archive/refs/heads/main.zip" -OutFile "$env:TEMP\sciter-js-sdk.zip"
+            Expand-Archive -Path "$env:TEMP\sciter-js-sdk.zip" -DestinationPath "C:\" -Force
+            Remove-Item "$env:TEMP\sciter-js-sdk.zip" -Force
+            Write-Host "Sciter SDK instalado." -ForegroundColor Green
+          } else {
+            Write-Host "Sciter SDK ja presente no cache." -ForegroundColor Green
+          }
+
       - name: Get version from Cargo.toml
         id: get_version
+        shell: pwsh
         run: |
           $cargoToml = Get-Content ".\Cargo.toml" -Raw
           if ($cargoToml -match 'version\s*=\s*"([^"]+)"') {
-              $version = $matches[1]
-              echo "version=$version" >> $env:GITHUB_OUTPUT
-              echo "Version detected: $version"
+            echo "version=$($matches[1])" >> $env:GITHUB_OUTPUT
+            Write-Host "Versao detectada: $($matches[1])" -ForegroundColor Green
           } else {
-              Write-Error "Could not read version from Cargo.toml"
-              exit 1
+            Write-Error "Nao foi possivel ler a versao do Cargo.toml"
+            exit 1
           }
+
+      - name: Build release
         shell: pwsh
+        run: |
+          Write-Host "Compilando projeto em modo release..." -ForegroundColor Yellow
+          cargo build --release
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Erro na compilacao!"
+            exit 1
+          }
+
+      - name: Package release
+        id: package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.version }}"
+          $releaseName = "release-$version"
+          $releaseDir = ".\$releaseName"
+          $zipFile = "$releaseName.zip"
+
+          if (Test-Path $releaseDir) { Remove-Item $releaseDir -Recurse -Force }
+          if (Test-Path $zipFile)    { Remove-Item $zipFile -Force }
+
+          New-Item -ItemType Directory -Path $releaseDir | Out-Null
+
+          $filesToCopy = @(
+            @{Source = ".\target\release\ddtank-rs.exe"; Dest = "$releaseDir\ddtank-rs.exe"; Required = $true},
+            @{Source = ".\target\release\sciter.dll";    Dest = "$releaseDir\sciter.dll";    Required = $true},
+            @{Source = ".\target\release\ui.rc";         Dest = "$releaseDir\ui.rc";         Required = $false},
+            @{Source = ".\target\release\reguinha.exe";  Dest = "$releaseDir\reguinha.exe";  Required = $false},
+            @{Source = ".\target\release\userdata.redb"; Dest = "$releaseDir\userdata.redb"; Required = $false}
+          )
+
+          foreach ($file in $filesToCopy) {
+            if (Test-Path $file.Source) {
+              Copy-Item $file.Source $file.Dest
+              Write-Host "  [OK] $($file.Source)" -ForegroundColor Green
+            } elseif ($file.Required) {
+              Write-Error "  [ERRO] $($file.Source) (OBRIGATORIO - NAO ENCONTRADO)"
+              exit 1
+            } else {
+              Write-Host "  [AVISO] $($file.Source) (opcional - nao encontrado)" -ForegroundColor DarkYellow
+            }
+          }
+
+          if (Test-Path ".\target\release\scripts") {
+            Copy-Item ".\target\release\scripts" -Destination "$releaseDir\scripts" -Recurse
+            Write-Host "  [OK] scripts\" -ForegroundColor Green
+          }
+
+          Compress-Archive -Path $releaseDir -DestinationPath $zipFile -CompressionLevel Optimal
+          Write-Host "Arquivo ZIP criado: $zipFile" -ForegroundColor Green
       
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
