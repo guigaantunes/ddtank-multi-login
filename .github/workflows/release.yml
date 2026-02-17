@@ -1,0 +1,63 @@
+name: Build and Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-upload:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build release
+        run: |
+          .\build-release.ps1
+        shell: pwsh
+      
+      - name: Get version from Cargo.toml
+        id: get_version
+        run: |
+          $cargoToml = Get-Content ".\Cargo.toml" -Raw
+          if ($cargoToml -match 'version\s*=\s*"([^"]+)"') {
+              $version = $matches[1]
+              echo "version=$version" >> $env:GITHUB_OUTPUT
+              echo "Version detected: $version"
+          } else {
+              Write-Error "Could not read version from Cargo.toml"
+              exit 1
+          }
+        shell: pwsh
+      
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./release-${{ steps.get_version.outputs.version }}.zip
+          asset_name: release-${{ steps.get_version.outputs.version }}.zip
+          asset_content_type: application/zip
