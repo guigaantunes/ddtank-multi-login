@@ -3,28 +3,154 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+const SCITER_SDK_URL: &str =
+    "https://github.com/c-smile/sciter-js-sdk/archive/refs/heads/main.zip";
+
+/// Locate the Sciter SDK directory.
+///
+/// Resolution order:
+///   1. `SCITER_SDK_DIR` environment variable (user/CI override)
+///   2. `.sciter-sdk/sciter-js-sdk-main` inside the project root
+///   3. Legacy `C:\sciter-js-sdk-main` path
+///
+/// If none exists, the SDK is downloaded from GitHub into option 2.
+fn locate_sciter_sdk() -> PathBuf {
+    // 1. Explicit environment variable
+    if let Ok(dir) = std::env::var("SCITER_SDK_DIR") {
+        let p = PathBuf::from(&dir);
+        if p.join("bin/windows/packfolder.exe").exists() {
+            println!("cargo:warning=Using Sciter SDK from SCITER_SDK_DIR: {}", dir);
+            return p;
+        }
+    }
+
+    let manifest_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
+    let local_sdk = manifest_dir.join(".sciter-sdk").join("sciter-js-sdk-main");
+
+    // 2. Local cached download
+    if local_sdk.join("bin/windows/packfolder.exe").exists() {
+        println!(
+            "cargo:warning=Using cached Sciter SDK at {}",
+            local_sdk.display()
+        );
+        return local_sdk;
+    }
+
+    // 3. Legacy fixed path
+    let legacy = PathBuf::from(r"C:\sciter-js-sdk-main");
+    if legacy.join("bin/windows/packfolder.exe").exists() {
+        println!("cargo:warning=Using Sciter SDK at legacy path C:\\sciter-js-sdk-main");
+        return legacy;
+    }
+
+    // None found – download
+    download_sciter_sdk(&manifest_dir.join(".sciter-sdk"));
+    assert!(
+        local_sdk.join("bin/windows/packfolder.exe").exists(),
+        "Sciter SDK download succeeded but packfolder.exe not found at {}",
+        local_sdk.join("bin/windows/packfolder.exe").display()
+    );
+    local_sdk
+}
+
+/// Download and extract the Sciter JS SDK into `dest_dir`.
+fn download_sciter_sdk(dest_dir: &std::path::Path) {
+    println!("cargo:warning=Downloading Sciter SDK from {}", SCITER_SDK_URL);
+
+    fs::create_dir_all(dest_dir).expect("failed to create .sciter-sdk directory");
+
+    let zip_path = dest_dir.join("sciter-js-sdk.zip");
+
+    // Download using PowerShell (available on all modern Windows)
+    let download_status = Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!(
+                "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; \
+                 Invoke-WebRequest -Uri '{}' -OutFile '{}'",
+                SCITER_SDK_URL,
+                zip_path.display()
+            ),
+        ])
+        .status()
+        .expect("failed to execute PowerShell for downloading Sciter SDK");
+
+    assert!(
+        download_status.success(),
+        "PowerShell failed to download Sciter SDK"
+    );
+    assert!(
+        zip_path.exists(),
+        "Sciter SDK zip not found after download at {}",
+        zip_path.display()
+    );
+
+    // Extract using PowerShell
+    let extract_status = Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!(
+                "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
+                zip_path.display(),
+                dest_dir.display()
+            ),
+        ])
+        .status()
+        .expect("failed to execute PowerShell for extracting Sciter SDK");
+
+    assert!(
+        extract_status.success(),
+        "PowerShell failed to extract Sciter SDK"
+    );
+
+    // Clean up zip
+    if let Err(e) = fs::remove_file(&zip_path) {
+        println!("cargo:warning=Failed to remove Sciter SDK zip: {}", e);
+    }
+
+    println!(
+        "cargo:warning=Sciter SDK downloaded and extracted to {}",
+        dest_dir.display()
+    );
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=src/ui");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=scripts");
-    println!("cargo:rerun-if-changed=C:/sciter-js-sdk-main/bin/windows/x64/sciter.dll");
 
     if std::env::var_os("CARGO_CFG_WINDOWS").is_some() {
-        let packfolder = r"C:\sciter-js-sdk-main\bin\windows\packfolder.exe";
-        let sciter_dll = PathBuf::from(r"C:\sciter-js-sdk-main\bin\windows\x64\sciter.dll");
-        let status = Command::new(packfolder)
+        let sdk_dir = locate_sciter_sdk();
+        let packfolder = sdk_dir.join("bin/windows/packfolder.exe");
+        let sciter_dll = sdk_dir.join("bin/windows/x64/sciter.dll");
+
+        println!("cargo:rerun-if-changed={}", sciter_dll.display());
+
+        let status = Command::new(&packfolder)
             .arg("./src/ui")
             .arg("./src/ui.rc")
             .arg("-binary")
             .status()
-            .expect("failed to execute packfolder.exe. Verify C:\\sciter-js-sdk-main\\bin\\windows\\packfolder.exe exists");
+            .unwrap_or_else(|e| {
+                panic!(
+                    "failed to execute packfolder.exe at {}: {}",
+                    packfolder.display(),
+                    e
+                )
+            });
 
         if !status.success() {
             panic!("packfolder.exe failed to generate src/ui.rc");
         }
 
         if !sciter_dll.exists() {
-            panic!("sciter.dll not found at C:\\sciter-js-sdk-main\\bin\\windows\\x64\\sciter.dll");
+            panic!(
+                "sciter.dll not found at {}",
+                sciter_dll.display()
+            );
         }
 
         let profile = std::env::var("PROFILE").expect("PROFILE env var is not set");
