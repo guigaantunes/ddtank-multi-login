@@ -1,36 +1,83 @@
-# DDTANK-rs
-DDTANK-rs is an easy-to-use ddtank login tool. It supports Linux, Windows and MacOS.
-It's recommanded to play ddtank in web browsers. However you can play it in an standalone 
-flashplayer (maybe available at [web archive](https://archive.org/details/standaloneflashplayers)). 
-Windows user can downlaod a standalone flashplayer from [flash.cn](https://www.flash.cn/support/debug-downloads)
+# DDTank Multi-Login
 
-## Use Lua script to create login strategy
+Ferramenta de login multi-contas para DDTank, desenvolvida em Rust com interface grafica moderna usando Sciter. Permite gerenciar e alternar entre multiplas contas de forma rapida e pratica.
 
-In `./scripts` folder, create a lua script named `xxx.lua`, in which you need to 
-create a function: `function login(username, password, server)`. 
+## Funcionalidades
 
-You can use following Lua script API to create login game strategy:
- - _G.agent (get, post, get_with, load_cookie)
- - _G.crypto (md5)
- - _G.get_cookie_by_cowv2
+### Gerenciamento de Contas
+Adicione, edite e remova contas de DDTank com facilidade. Cada conta armazena usuario, senha, servidor e um apelido opcional para identificacao rapida. As contas sao salvas em um banco de dados local (`userdata.redb`), garantindo persistencia entre sessoes. NÂO COMPARTILHE ESSE ARQUIVO JAMAIS
 
-See `./scripts` folder.
+### Login Automatizado
+Ao clicar em uma conta, o sistema realiza o login automaticamente atraves de scripts Lua que simulam o processo de autenticacao no servidor 337.com. O login e feito em segundo plano e o jogo e aberto diretamente no logger que voce estiver usando.
 
-## Use ddtank-lua command line tool to test script (beta)
+### Multi-Servidor
+Suporte a todos os servidores brasileiros do DDTank 337:
+- Ilha dos Valentoes (S1-3, 9-10, 12-19)
+- Vale dos Ouricos (S4-8, 11, 20-46)
+- Jogos Olimpicos (S47-131, 362-375)
+- Lugares Escuros (S132-394)
+- Universo DDToker (S395-398)
+- Legado dos Campeoes (S399)
+- Aurora (S400)
 
-```powershell
-ddtank-lua -n ./script/7k7k.lua -u $env:DDTANK_USERNAME -p $env:DDTANK_PASSWORD -s $env:DDTANK_SERVER_ID
+### Busca de Contas
+Campo de busca integrado que filtra contas em tempo real por nome de usuario ou apelido, facilitando a navegacao quando se tem muitas contas cadastradas.
+
+### Ordenacao por Uso Recente
+As contas sao automaticamente ordenadas pela ultima vez que foram utilizadas. A conta usada mais recentemente aparece primeiro na lista.
+
+### Regua Integrada
+Botao "Abrir Regua" que executa a ferramenta `reguinha.exe` (boomzruler) diretamente pela interface, util para medir distancias e calcular angulos durante o jogo.
+
+### Encerramento Automatico de Processos
+Ao fechar o aplicativo, todos os processos filhos (como a regua) sao encerrados automaticamente, evitando processos orfaos em execucao.
+
+## Requisitos
+
+- **sciter-js-sdk 5.0.2.7** (`sciter.dll`) - Runtime da interface grafica (ja carregada no build)
+
+## Estrutura do Projeto
+
+```
+ddtank-rs/
+├── src/
+│   ├── main.rs          # Ponto de entrada, handler Sciter
+│   ├── lib.rs           # Engine de banco de dados e estrategias
+│   ├── ui/
+│   │   ├── index.htm    # Pagina principal
+│   │   ├── css/         # Estilos da interface
+│   │   ├── js/          # Logica da interface (Reactor/JSX)
+│   │   └── htm/         # Modais (adicionar/editar conta)
+├── scripts/
+│   └── 337.lua          # Script de login para 337.com
+├── build.rs             # Script de build (empacotamento UI, copia de arquivos)
+├── build-release.ps1    # Script para gerar release zipada
+└── Cargo.toml           # Dependencias do projeto
 ```
 
-Use `ddtank-lua --help` to see detailed usage.
+## Como Usar
 
-## Requirements
- - scite-js-sdk 5.0.2.7 (sciter.dll)
- - Standalone flash player 32 (flashplayer_sa.exe)
+### Gerar release
+```powershell
+.\build-release.ps1
+```
+O script compila o projeto, copia os arquivos necessarios e gera um arquivo ZIP pronto para distribuicao.
 
-## Current Supported Platform
- - [x] 7K7K
- - [x] 4399 (beta, based on webview2)
- - [x] 7road
- - [x] 7road Classic
- - [x] Common login based on webview2 (beta)
+## Tecnologias
+
+- **Rust** - Linguagem principal
+- **Sciter** - Framework de interface grafica (HTML/CSS/JS nativo)
+- **Reactor** - Sistema reativo para UI (similar ao React)
+- **redb** - Banco de dados embarcado em Rust
+- **mlua** - Integracao Lua 5.4 em Rust
+- **reqwest** - Cliente HTTP para login automatizado
+
+## Contribuidores
+
+<a href="https://github.com/guigaantunes/ddtank-multi-login/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=guigaantunes/ddtank-multi-login" />
+</a>
+
+## Licenca
+
+Este projeto esta licenciado sob a licenca MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
