@@ -35,6 +35,20 @@ jobs:
           path: target
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
       
+      - name: Cache Sciter SDK
+        id: cache-sciter
+        uses: actions/cache@v4
+        with:
+          path: C:\sciter-js-sdk-main
+          key: sciter-js-sdk-main
+
+      - name: Download Sciter SDK
+        if: steps.cache-sciter.outputs.cache-hit != 'true'
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/c-smile/sciter-js-sdk/archive/refs/heads/main.zip" -OutFile "$env:TEMP\sciter-js-sdk.zip"
+          Expand-Archive -Path "$env:TEMP\sciter-js-sdk.zip" -DestinationPath "C:\" -Force
+        shell: pwsh
+
       - name: Build release
         run: |
           .\build-release.ps1
