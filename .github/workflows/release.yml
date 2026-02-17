@@ -1,6 +1,7 @@
 name: Build and Release
 
 on:
+  push:
   release:
     types: [published]
 
@@ -38,21 +39,8 @@ jobs:
       - name: Cache Sciter SDK
         uses: actions/cache@v4
         with:
-          path: C:\sciter-js-sdk-main
-          key: sciter-js-sdk-main
-
-      - name: Download Sciter SDK
-        shell: pwsh
-        run: |
-          if (-not (Test-Path "C:\sciter-js-sdk-main\bin\windows\packfolder.exe")) {
-            Write-Host "Baixando Sciter SDK..." -ForegroundColor Yellow
-            Invoke-WebRequest -Uri "https://github.com/c-smile/sciter-js-sdk/archive/refs/heads/main.zip" -OutFile "$env:TEMP\sciter-js-sdk.zip"
-            Expand-Archive -Path "$env:TEMP\sciter-js-sdk.zip" -DestinationPath "C:\" -Force
-            Remove-Item "$env:TEMP\sciter-js-sdk.zip" -Force
-            Write-Host "Sciter SDK instalado." -ForegroundColor Green
-          } else {
-            Write-Host "Sciter SDK ja presente no cache." -ForegroundColor Green
-          }
+          path: .sciter-sdk
+          key: sciter-js-sdk-v1-${{ hashFiles('build.rs') }}
 
       - name: Get version from Cargo.toml
         id: get_version
@@ -78,6 +66,7 @@ jobs:
           }
 
       - name: Package release
+        if: github.event_name == 'release'
         id: package
         shell: pwsh
         run: |
@@ -120,6 +109,7 @@ jobs:
           Write-Host "Arquivo ZIP criado: $zipFile" -ForegroundColor Green
       
       - name: Upload Release Asset
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

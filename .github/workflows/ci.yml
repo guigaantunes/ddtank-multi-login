@@ -1,0 +1,75 @@
+name: CI Build Test
+
+on:
+  push:
+    branches: ['*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Sciter SDK
+        uses: actions/cache@v4
+        with:
+          path: .sciter-sdk
+          key: sciter-js-sdk-v1-${{ hashFiles('build.rs') }}
+
+      - name: Build release
+        shell: pwsh
+        run: |
+          Write-Host "Compilando projeto em modo release..." -ForegroundColor Yellow
+          cargo build --release
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Erro na compilacao!"
+            exit 1
+          }
+          Write-Host "Build concluido com sucesso!" -ForegroundColor Green
+
+      - name: Verify build artifacts
+        shell: pwsh
+        run: |
+          $artifacts = @(
+            ".\target\release\ddtank-rs.exe",
+            ".\target\release\sciter.dll"
+          )
+          $allFound = $true
+          foreach ($artifact in $artifacts) {
+            if (Test-Path $artifact) {
+              Write-Host "  [OK] $artifact" -ForegroundColor Green
+            } else {
+              Write-Host "  [ERRO] $artifact NAO ENCONTRADO" -ForegroundColor Red
+              $allFound = $false
+            }
+          }
+          if (-not $allFound) {
+            Write-Error "Artefatos obrigatorios nao encontrados!"
+            exit 1
+          }
