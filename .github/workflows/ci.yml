@@ -42,6 +42,31 @@ jobs:
           path: .sciter-sdk
           key: sciter-js-sdk-v1-${{ hashFiles('build.rs') }}
 
+      - name: Setup Sciter SDK
+        shell: pwsh
+        run: |
+          $sdkPath = ".sciter-sdk\sciter-js-sdk-main"
+          $legacyPath = "C:\sciter-js-sdk-main"
+
+          if (-not (Test-Path "$sdkPath\bin\windows\packfolder.exe")) {
+            Write-Host "Downloading Sciter SDK..." -ForegroundColor Yellow
+            New-Item -ItemType Directory -Path ".sciter-sdk" -Force | Out-Null
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri "https://github.com/c-smile/sciter-js-sdk/archive/refs/heads/main.zip" -OutFile ".sciter-sdk\sdk.zip"
+            Expand-Archive -Path ".sciter-sdk\sdk.zip" -DestinationPath ".sciter-sdk" -Force
+            Remove-Item ".sciter-sdk\sdk.zip" -ErrorAction SilentlyContinue
+            Write-Host "Sciter SDK downloaded successfully" -ForegroundColor Green
+          } else {
+            Write-Host "Sciter SDK found in cache" -ForegroundColor Green
+          }
+
+          # Create legacy path junction for backward compatibility with older build.rs
+          if (-not (Test-Path $legacyPath)) {
+            $resolvedSdk = (Resolve-Path $sdkPath).Path
+            New-Item -ItemType Junction -Path $legacyPath -Target $resolvedSdk | Out-Null
+            Write-Host "Created legacy junction: $legacyPath -> $resolvedSdk" -ForegroundColor Green
+          }
+
       - name: Build release
         shell: pwsh
         run: |
