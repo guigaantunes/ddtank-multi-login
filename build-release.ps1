@@ -4,6 +4,21 @@
 Write-Host "=== DDTank-RS Release Builder ===" -ForegroundColor Cyan
 Write-Host ""
 
+# Verificar/baixar Sciter SDK
+$sciterSdkPath = "C:\sciter-js-sdk-main"
+Write-Host "Verificando Sciter SDK em $sciterSdkPath..." -ForegroundColor Yellow
+if (-not (Test-Path "$sciterSdkPath\bin\windows\packfolder.exe")) {
+    Write-Host "  Sciter SDK nao encontrado. Baixando..." -ForegroundColor Yellow
+    $zipPath = "$env:TEMP\sciter-js-sdk.zip"
+    Invoke-WebRequest -Uri "https://github.com/c-smile/sciter-js-sdk/archive/refs/heads/main.zip" -OutFile $zipPath
+    Expand-Archive -Path $zipPath -DestinationPath "C:\" -Force
+    Remove-Item $zipPath -Force
+    Write-Host "  Sciter SDK instalado em $sciterSdkPath" -ForegroundColor Green
+} else {
+    Write-Host "  Sciter SDK ja instalado" -ForegroundColor Green
+}
+Write-Host ""
+
 # Encerrar processos em execucao
 Write-Host "Verificando processos em execucao..." -ForegroundColor Yellow
 $processNames = @("ddtank-rs", "ddtank-lua", "cowv2", "reguinha")

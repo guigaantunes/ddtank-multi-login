@@ -34,39 +34,25 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Cache Sciter SDK
-        id: cache-sciter
         uses: actions/cache@v4
         with:
           path: C:\sciter-js-sdk-main
           key: sciter-js-sdk-main
-
-      - name: Download Sciter SDK
-        if: steps.cache-sciter.outputs.cache-hit != 'true'
-        run: |
-          Invoke-WebRequest -Uri "https://github.com/c-smile/sciter-js-sdk/archive/refs/heads/main.zip" -OutFile "$env:TEMP\sciter-js-sdk.zip"
-          Expand-Archive -Path "$env:TEMP\sciter-js-sdk.zip" -DestinationPath "C:\" -Force
-        shell: pwsh
-
+      
       - name: Build release
+        id: build
+        shell: pwsh
         run: |
           .\build-release.ps1
-        shell: pwsh
-      
-      - name: Get version from Cargo.toml
-        id: get_version
-        run: |
           $cargoToml = Get-Content ".\Cargo.toml" -Raw
           if ($cargoToml -match 'version\s*=\s*"([^"]+)"') {
-              $version = $matches[1]
-              echo "version=$version" >> $env:GITHUB_OUTPUT
-              echo "Version detected: $version"
+              echo "version=$($matches[1])" >> $env:GITHUB_OUTPUT
           } else {
               Write-Error "Could not read version from Cargo.toml"
               exit 1
           }
-        shell: pwsh
       
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
@@ -74,6 +60,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./release-${{ steps.get_version.outputs.version }}.zip
-          asset_name: release-${{ steps.get_version.outputs.version }}.zip
+          asset_path: ./release-${{ steps.build.outputs.version }}.zip
+          asset_name: release-${{ steps.build.outputs.version }}.zip
           asset_content_type: application/zip
