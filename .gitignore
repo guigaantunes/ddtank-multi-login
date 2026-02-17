@@ -3,3 +3,5 @@
 /test
 /flashplayer_sa.exe
 /userdata.redb
+/release*
+.vscode

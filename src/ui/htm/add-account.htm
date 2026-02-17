@@ -1,54 +1,49 @@
-<html window-width="18em" window-height="14em">
+<html window-width="28em" window-height="30em">
 
 <head>
     <meta charset="utf-8">
-    <title>添加账户</title>
+    <title>Adicionar Conta</title>
     <link rel="stylesheet" href="../css/style.css">
-    <style>
-        body {
-            padding: 0.5em 1em;
-        }
-    </style>
     <script|module>
-        document.on("click", "button#submit", () => {
-            let data = document.$("form#account").value;
-            Window.this.close(data);
-        })
-
-        document.on("ready", () => {
-            let { strategy_list } = Window.this.parameters;
-            let strategy_element = document.$("[name='strategy']");
-            strategy_list.forEach(strategy => {
-                strategy_element.select.options.append(<option value={strategy}>{strategy}</option>);
-                strategy_element.value = strategy;
-            });
-            if (strategy_list.length > 0) {
-                strategy_element.value = strategy_list[0];
-            }
-        })
+        import { initializeForm } from "../js/form-controller.js";
+        initializeForm(false);
     </script>
 </head>
 
-<body>
+<body class="modal-body">
+    <h2 class="modal-title">Adicionar Conta</h2>
     <form#account>
-        <div><label>账号</label>
-            <input|text (username) />
+        <div class="form-field">
+            <label>Usuário</label>
+            <input|text (username) placeholder="Digite seu usuário" />
         </div>
-        <div><label>密码</label>
-            <input|password (password) />
+        <div class="form-field">
+            <label>Senha</label>
+            <input|password (password) placeholder="Digite sua senha" />
         </div>
-        <div><label>策略</label>
-            <select|dropdown (strategy)>
-                </select>
+        <input|hidden (strategy) value="337.lua" />
+        <div class="form-field">
+            <label>Servidor</label>
+            <select|dropdown (server)>
+                <option value="10000">Ilha dos valentões (S1-3, 9-10, 12-19)</option>
+                <option value="10001">Vale dos Ouriços (S4-8, 11, 20-46)</option>
+                <option value="10005">Jogos Olímpicos (S47-131, 362-375)</option>
+                <option value="10006">Lugares escuros (S132-394)</option>
+                <option value="10031">Universo DDToker (S395-398)</option>
+                <option value="10090">Legado dos Campeões (S399)</option>
+                <option value="10091">Aurora (S400)</option>
+            </select>
         </div>
-        <div><label>区服</label>
-            <input|text (server) />
+        <div class="form-field">
+            <label>Apelido (opcional)</label>
+            <input|text (nickname) placeholder="Como deseja identificar esta conta" />
         </div>
-        <div><label>昵称</label>
-            <input|text (nickname) />
-        </div>
-        <button#submit>添加账户</button>
-            </form>
+        <button#submit class="btn-primary">Adicionar Conta</button>
+    </form>
+</body>
+
+</html>
+    </form>
 </body>
 
 </html>

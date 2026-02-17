@@ -14,6 +14,9 @@ path = "src/ddtank_lua.rs"
 name = "cowv2"
 path = "src/cowv2.rs"
 
+[profile.dev]
+panic = "abort"
+
 [profile.release]
 strip = true
 opt-level = "z"
@@ -25,9 +28,9 @@ panic = "abort"
 sciter-rs = "0.5.58"
 anyhow = "1.0"
 glob = "0.3.1"
-rlua = "0.19.4"
+mlua = { version = "0.9", features = ["lua54", "serialize", "vendored"] }
 reqwest = { version = "0.11.14", features = ["blocking", "cookies"] }
-rust-crypto = "0.2.36"
+md5 = "0.7"
 clap = { version = "4.1.14", features = ["derive"] }
 wry = "0.27.1"
 regex = "1.7.3"
@@ -35,8 +38,11 @@ redb = "0.14.0"
 uuid = { version = "1.3.0", features = ["v4"] }
 bincode = "1.3.3"
 serde = { version = "1.0.159", features = ["derive"] }
+serde_json = "1.0"
 sciter-serde = "0.3.2"
+time = "0.3.36"
 
 [build-dependencies]
 embed-manifest = "1.3.1"
 which = "4.4.0"
+redb = "0.14.0"
