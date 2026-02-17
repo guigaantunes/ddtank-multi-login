@@ -1,11 +1,121 @@
 use std::{collections::HashMap, io::Read, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use crypto::digest::Digest;
 use reqwest::cookie::Jar;
+use serde::{Deserialize, Serialize};
+use redb::ReadableTable;
 
-pub mod store_engine;
-pub mod userinfo;
+// ===== Data Types =====
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserInfo {
+    pub username: String,
+    pub password: String,
+    pub strategy: String,
+    pub server: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nickname: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_timestamp")]
+    pub last_used: Option<u64>,
+}
+
+fn deserialize_timestamp<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    
+    let opt: Option<f64> = Option::deserialize(deserializer)?;
+    Ok(opt.map(|f| f as u64))
+}
+
+// ===== Database Engine =====
+
+pub struct StoreEngine {
+    db: redb::Database,
+}
+
+const TABLE: redb::TableDefinition<&str, &str> = redb::TableDefinition::new("users");
+
+impl StoreEngine {
+    pub fn create(path: &str) -> Result<Self> {
+        let db = redb::Database::create(path)?;
+        
+        // Garantir que a tabela existe
+        let write_txn = db.begin_write()?;
+        {
+            let _table = write_txn.open_table(TABLE)?;
+        }
+        write_txn.commit()?;
+        
+        Ok(Self { db })
+    }
+
+    pub fn get_user(&self, uuid: &uuid::Uuid) -> Option<UserInfo> {
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(TABLE).ok()?;
+        let key = uuid.to_string();
+        let value = table.get(key.as_str()).ok()??;
+        let json = value.value();
+        serde_json::from_str(json).ok()
+    }
+
+    pub fn users(&self) -> Vec<(uuid::Uuid, UserInfo)> {
+        let mut users = Vec::new();
+        
+        // Return empty if table doesn't exist yet
+        let read_txn = match self.db.begin_read() {
+            Ok(txn) => txn,
+            Err(_) => return users,
+        };
+        
+        let table = match read_txn.open_table(TABLE) {
+            Ok(t) => t,
+            Err(_) => return users,
+        };
+        
+        if let Ok(mut iter) = table.iter() {
+            while let Some((key, value)) = iter.next() {
+                let key_str: &str = key.value();
+                let value_str: &str = value.value();
+                
+                if let (Ok(uuid), Ok(user)) = (
+                    uuid::Uuid::parse_str(key_str),
+                    serde_json::from_str::<UserInfo>(value_str)
+                ) {
+                    users.push((uuid, user));
+                }
+            }
+        }
+        
+        users
+    }
+
+    pub fn insert(&mut self, uuid: &uuid::Uuid, user: &UserInfo) -> Result<()> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(TABLE)?;
+            let key = uuid.to_string();
+            let json = serde_json::to_string(user)?;
+            table.insert(key.as_str(), json.as_str())?;
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    pub fn remove(&mut self, uuid: &uuid::Uuid) -> Result<()> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(TABLE)?;
+            let key = uuid.to_string();
+            table.remove(key.as_str())?;
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+}
+
+// ===== Strategy System =====
 
 #[derive(Default)]
 pub struct Strategy {
@@ -53,36 +163,31 @@ pub fn execute_strategy(
     password: &str,
     server: &str,
 ) -> Result<String> {
-    let lua = rlua::Lua::new();
-    let result = lua.context(|lua_context| -> Result<String> {
-        let globals = lua_context.globals();
+    let lua = mlua::Lua::new();
+    let globals = lua.globals();
 
-        let agent_constructor = lua_context.create_function(|_, ()| Ok(Agent::new()))?;
-        globals.set("agent", agent_constructor)?;
+    let agent_constructor = lua.create_function(|_, ()| Ok(Agent::new()))?;
+    globals.set("agent", agent_constructor)?;
 
-        let crypto_rs = lua_context.create_table()?;
-        let md5 = lua_context.create_function(|_, input: String| {
-            let mut md5 = crypto::md5::Md5::new();
-            md5.input_str(&input);
-            Ok(md5.result_str())
+    let crypto_rs = lua.create_table()?;
+        let md5_func = lua.create_function(|_, input: String| {
+            let digest = md5::compute(input.as_bytes());
+            Ok(format!("{:x}", digest))
         })?;
 
-        crypto_rs.set("md5", md5)?;
-        globals.set("crypto", crypto_rs)?;
+    crypto_rs.set("md5", md5_func)?;
+    globals.set("crypto", crypto_rs)?;
 
-        let cowv2_func =
-            lua_context.create_function(|_, (url, re, title): (String, String, String)| {
-                let result = get_cookie_by_cowv2(url, re, title).unwrap();
-                Ok(result)
-            })?;
-        globals.set("get_cookie_by_cowv2", cowv2_func)?;
+    let cowv2_func =
+        lua.create_function(|_, (url, re, title): (String, String, String)| {
+            let result = get_cookie_by_cowv2(url, re, title).unwrap();
+            Ok(result)
+        })?;
+    globals.set("get_cookie_by_cowv2", cowv2_func)?;
 
-        lua_context.load(&script).exec()?;
-        let login_function: rlua::Function = globals.get("login")?;
-        let result = login_function.call::<_, String>((username, password, server))?;
-
-        Ok(result)
-    })?;
+    lua.load(script).exec()?;
+    let login_function: mlua::Function = globals.get("login")?;
+    let result = login_function.call::<_, String>((username, password, server))?;
 
     Ok(result)
 }
@@ -116,8 +221,8 @@ impl Agent {
     }
 }
 
-impl rlua::UserData for Agent {
-    fn add_methods<'lua, T: rlua::UserDataMethods<'lua, Self>>(methods: &mut T) {
+impl mlua::UserData for Agent {
+    fn add_methods<'lua, T: mlua::UserDataMethods<'lua, Self>>(methods: &mut T) {
         methods.add_method("get", |_, agent, (url,): (String,)| {
             let response = agent.client.get(url).send().unwrap().text().unwrap();
             Ok(response)
@@ -131,7 +236,7 @@ impl rlua::UserData for Agent {
             Ok((text, url))
         });
 
-        methods.add_method("post", |_, agent, (url, form): (String, rlua::Table)| {
+        methods.add_method("post", |_, agent, (url, form): (String, mlua::Table)| {
             let form: std::collections::HashMap<String, String> = form
                 .pairs::<String, String>()
                 .into_iter()
