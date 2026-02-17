@@ -58,10 +58,25 @@ ddtank-rs/
 ## Como Usar
 
 ### Gerar release
+
+#### Manualmente
 ```powershell
 .\build-release.ps1
 ```
 O script compila o projeto, copia os arquivos necessarios e gera um arquivo ZIP pronto para distribuicao.
+
+#### Automaticamente (GitHub Actions)
+O projeto possui um workflow automatizado que executa a cada vez que uma release e publicada no GitHub:
+
+1. Acesse a pagina de releases do repositorio
+2. Crie uma nova release com uma tag (ex: `v0.1.2`)
+3. O workflow sera executado automaticamente
+4. O arquivo `release-{version}.zip` sera gerado e anexado a release
+
+O workflow automaticamente:
+- Compila o projeto em modo release
+- Executa o script `build-release.ps1`
+- Faz upload do arquivo ZIP gerado para a release no GitHub
 
 ## Tecnologias
 
