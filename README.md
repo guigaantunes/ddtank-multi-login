@@ -78,6 +78,19 @@ O workflow automaticamente:
 - Executa o script `build-release.ps1`
 - Faz upload do arquivo ZIP gerado para a release no GitHub
 
+##### Acompanhar o processo de criacao da release
+Para acompanhar o progresso da criacao da release em tempo real:
+
+1. Acesse a aba **[Actions](https://github.com/guigaantunes/ddtank-multi-login/actions)** do repositorio
+2. Clique no workflow **"Build and Release"**
+3. Voce vera uma lista de todas as execucoes do workflow, com status:
+   - 🟡 **Em andamento** (amarelo) - A release esta sendo criada
+   - ✅ **Sucesso** (verde) - Release criada e arquivo ZIP anexado
+   - ❌ **Falha** (vermelho) - Houve um erro no processo
+4. Clique em qualquer execucao para ver os detalhes e logs de cada etapa
+
+Link direto: https://github.com/guigaantunes/ddtank-multi-login/actions/workflows/release.yml
+
 ## Tecnologias
 
 - **Rust** - Linguagem principal
